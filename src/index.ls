@@ -1,6 +1,6 @@
 module.exports =
   pkg:
-    extend: {name: "base", version: "0.0.1"}
+    extend: {name: "@makechart/base"}
     dependencies: []
   init: ({root, context, t, pubsub}) ->
     pubsub.fire \init, mod: mod({context, t})
