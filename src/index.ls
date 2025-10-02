@@ -1,3 +1,182 @@
+get-label-force = (d3) ->
+  # helpers -----------------------------------------------------
+  clamp = (v, lo, hi) -> if v < lo then lo else if v > hi then hi else v
+  nearest-on-rect = (cx, cy, d) ->
+    hw = (d.w or 0) / 2
+    hh = (d.h or 0) / 2
+    left   = d.x - hw
+    right  = d.x + hw
+    top    = d.y - hh
+    bottom = d.y + hh
+    [ clamp(cx, left, right), clamp(cy, top, bottom) ]
+
+  # === Custom force: 矩形環帶 + 矩形/圓碰撞 + X 對齊 + 內邊界限制 =========
+  force-label-rect-band = (opts={}) ->
+    # 目標圓心/半徑
+    get-px = opts.get-px or ((d)-> d.data.px)
+    get-py = opts.get-py or ((d)-> d.data.py)
+    get-pr = opts.get-pr or ((d)-> d.data.radius)
+
+    # 規格參數
+    band-margin = opts.band-margin or 5
+    rect-pad    = opts.rect-pad or 2
+    circle-pad  = opts.circle-pad or 0
+    k-band      = opts.k-band or 0.35
+    k-collide   = opts.k-collide or 0.7
+    it-rect     = opts.it-rect or 2
+    it-circle   = opts.it-circle or 1
+    k-alignx    = opts.k-alignx or 0.12
+    align-dead  = opts.align-deadband or 1
+
+    # ★ 畫布範圍（必填）＋ 邊界保留距（可選）
+    canvas-w    = opts.canvas-w or 800
+    canvas-h    = opts.canvas-h or 600
+    bounds-pad  = opts.bounds-pad or 0      # 例如想距離邊緣保留 8px，就設 8
+    k-bounds    = opts.k-bounds or 0.9      # 邊界推回力（建議偏強些）
+
+    nodes = null
+    circles = null
+
+    resolve-circles = ->
+      circles := (for d in nodes
+        { x: +get-px(d), y: +get-py(d), r: +get-pr(d) })
+
+    # 1) band：讓「資料點→矩形外殼最近點」距離 ≈ r + margin
+    apply-band = (alpha) ->
+      for d in nodes
+        cx = +get-px d; cy = +get-py d; pr = +get-pr d
+        target = pr + band-margin
+        [px, py] = nearest-on-rect cx, cy, d
+        dx = px - cx; dy = py - cy
+        dist = Math.hypot dx, dy
+        if dist is 0
+          dx = d.x - cx; dy = d.y - cy
+          if dx is 0 and dy is 0
+            dx = (Math.random! - 0.5) * 1e-6
+            dy = (Math.random! - 0.5) * 1e-6
+          dist = Math.hypot dx, dy
+        if dist < target
+          k = (target - dist) / dist * (k-band * alpha)
+          d.vx = (d.vx or 0) + dx * k
+          d.vy = (d.vy or 0) + dy * k
+        else if dist > target
+          k = (dist - target) / dist * (k-band * alpha)
+          d.vx = (d.vx or 0) - dx * k
+          d.vy = (d.vy or 0) - dy * k
+
+    # 1.5) X 對齊（弱）：把 label 中心往 px 拉，僅作用於 vx
+    apply-align-x = (alpha) ->
+      return unless k-alignx > 0
+      for d in nodes
+        px = +get-px d
+        dx = px - d.x
+        if Math.abs(dx) > align-dead
+          d.vx = (d.vx or 0) + dx * k-alignx * alpha
+
+    # 2) 矩形-矩形碰撞（AABB，最小重疊軸）
+    apply-rect-collide = (alpha) ->
+      qt = d3.quadtree!.x((d)->d.x).y((d)->d.y).addAll nodes
+      for d in nodes
+        ahw = (d.w or 0)/2 + rect-pad
+        ahh = (d.h or 0)/2 + rect-pad
+        x0 = d.x - (ahw + 200); y0 = d.y - (ahh + 200)
+        x1 = d.x + (ahw + 200); y1 = d.y + (ahh + 200)
+        qt.visit (nd, nx0, ny0, nx1, ny1) ->
+          q = nd.data
+          if q? and q isnt d
+            bhw = (q.w or 0)/2 + rect-pad
+            bhh = (q.h or 0)/2 + rect-pad
+            dx = q.x - d.x; dy = q.y - d.y
+            if Math.abs(dx) < (ahw + bhw) and Math.abs(dy) < (ahh + bhh)
+              ox = (ahw + bhw) - Math.abs(dx)
+              oy = (ahh + bhh) - Math.abs(dy)
+              if ox < oy
+                sgn = if dx >= 0 then 1 else -1
+                sep = ox * sgn; k = (k-collide * alpha) * 0.5
+                d.vx = (d.vx or 0) - sep * k
+                q.vx = (q.vx or 0) + sep * k
+              else
+                sgn = if dy >= 0 then 1 else -1
+                sep = oy * sgn; k = (k-collide * alpha) * 0.5
+                d.vy = (d.vy or 0) - sep * k
+                q.vy = (q.vy or 0) + sep * k
+          (nx0 > x1) or (nx1 < x0) or (ny0 > y1) or (ny1 < y0)
+
+    # 3) 矩形-圓碰撞（label vs 所有資料點）
+    apply-rect-circle = (alpha) ->
+      qt = d3.quadtree!.x((c)->c.x).y((c)->c.y).addAll circles
+      for d in nodes
+        ahw = (d.w or 0)/2; ahh = (d.h or 0)/2
+        x0 = d.x - (ahw + 300); y0 = d.y - (ahh + 300)
+        x1 = d.x + (ahw + 300); y1 = d.y + (ahh + 300)
+        qt.visit (nd, nx0, ny0, nx1, ny1) ->
+          c = nd.data
+          if c?
+            [px, py] = nearest-on-rect c.x, c.y, d
+            dx = px - c.x; dy = py - c.y
+            dist = Math.hypot dx, dy
+            need = c.r + circle-pad
+            if dist < need
+              if dist is 0
+                dx = d.x - c.x; dy = d.y - c.y
+                if dx is 0 and dy is 0
+                  dx = (Math.random! - 0.5) * 1e-6
+                  dy = (Math.random! - 0.5) * 1e-6
+                dist = Math.hypot dx, dy
+              sep = (need - dist); k = (k-collide * alpha)
+              d.vx = (d.vx or 0) + (dx / dist) * sep * k
+              d.vy = (d.vy or 0) + (dy / dist) * sep * k
+          (nx0 > x1) or (nx1 < x0) or (ny0 > y1) or (ny1 < y0)
+
+    # 4) ★ 邊界力：避免越界（以矩形外框 + bounds-pad 為準）
+    apply-bounds = (alpha) ->
+      lw = bounds-pad
+      tw = bounds-pad
+      rw = canvas-w - bounds-pad
+      bw = canvas-h - bounds-pad
+      for d in nodes
+        hw = (d.w or 0) / 2
+        hh = (d.h or 0) / 2
+        # 左邊
+        overL = (d.x - hw) - lw
+        if overL < 0
+          d.vx = (d.vx or 0) - overL * k-bounds * alpha
+        # 右邊
+        overR = (d.x + hw) - rw
+        if overR > 0
+          d.vx = (d.vx or 0) - overR * k-bounds * alpha
+        # 上邊
+        overT = (d.y - hh) - tw
+        if overT < 0
+          d.vy = (d.vy or 0) - overT * k-bounds * alpha
+        # 下邊
+        overB = (d.y + hh) - bw
+        if overB > 0
+          d.vy = (d.vy or 0) - overB * k-bounds * alpha
+
+    force = (alpha) ->
+      return unless nodes? and nodes.length
+      apply-band alpha           # 半徑帶
+      apply-align-x alpha        # X 置中（弱）
+      for i from 0 til it-rect   # 矩形-矩形
+        apply-rect-collide alpha
+      for i from 0 til it-circle # 矩形-圓
+        apply-rect-circle alpha
+      apply-bounds alpha         # ★ 邊界推回
+      return
+
+    force.initialize = (_) ->
+      nodes := _
+      resolve-circles!
+      return
+
+    force.update-circles = ->
+      resolve-circles!
+      force
+
+    force
+  force-label-rect-band
+
 module.exports =
   pkg:
     extend: {name: "@makechart/base"}
@@ -49,6 +228,8 @@ mod = ({context, t}) ->
       opacity: type: \number, default: 0.75, min: 0, max: 1, step: 0.01
       stroke: type: \color, default: \#000
       stroke-width: type: \number, default: 1, min: 0, max: 100, step: 0.5
+    label:
+      enabled: type: \boolean, default: false
     trend:
       enabled: type: \boolean, default: false
       stroke: type: \color, default: 'rgba(0,0,0,.3)'
@@ -72,7 +253,9 @@ mod = ({context, t}) ->
     y: {type: \R, name: "Y coordinate"}
     order: {type: \O, name: "Order"}
   init: ->
+    @label-force = get-label-force d3
     @tint = tint = new chart.utils.tint!
+    @sim = d3.forceSimulation!
     @g = Object.fromEntries <[view xaxis yaxis legend]>.map ~> [it, d3.select(@layout.get-group it)]
     @regression = @g.view.append \line .attr(\opacity, 0) .attr(\class, \regression)
     @trend = @g.view.append \path .attr(\opacity, 0) .attr(\class, \trend)
@@ -116,6 +299,10 @@ mod = ({context, t}) ->
       d.size = if isNaN(d.size) => 0 else d.size
       d.x = if isNaN(d.x) => 0 else d.x
       d.y = if isNaN(d.y) => 0 else d.y
+    @nodes = @data.map (data) ->
+      ret = {data}
+      data.node = ret
+      ret
   resize: ->
     @tint.set @cfg.palette
     @tip.toggle(if @cfg.{}tip.enabled? => @cfg.tip.enabled else true)
@@ -165,6 +352,35 @@ mod = ({context, t}) ->
       @xaxis.render!
 
     for i from 0 til 2 => axising!
+    @data.map (d) ~>
+      d.radius = if @binding.size? => @scale.s(d.size) >? 1 else (@cfg.dot.max-radius / 2) >? 1
+      d.px = @scale.x d.x
+      d.py = @scale.y d.y
+    @sim.nodes @nodes
+
+    box = @layout.get-box \view
+    if @cfg.label.enabled =>
+      @sim
+        .force \label, @label-force do
+          band-margin: 5
+          rect-pad: 2       # 文字框留白
+          circle-pad: 2     # 文字框對圓的額外留白
+          k-band: 0.35
+          k-collide: 3.7
+          it-rect: 2
+          it-circle: 1
+          k-alignx: 0.02      # ★ X 置中力（可依視覺調強弱）
+          align-deadband: 1
+          canvas-w: box.width
+          canvas-h: box.height
+          bounds-pad: 4        # 邊緣 padding
+          k-bounds: 0.9        # 邊界力
+      @sim
+        .alpha 1
+        .alphaDecay 0.03
+        .velocityDecay 0.4
+      @sim.restart!
+
 
   render: ->
     {data, line, binding, scale, tint, legend, cfg} = @
@@ -180,7 +396,7 @@ mod = ({context, t}) ->
         .attr \strokeWidth, (d) -> cfg.dot.strokeWidth
     @g.view.selectAll \circle.data
       .transition!duration 350
-      .attr \r, (d) -> if binding.size? => scale.s(d.size) >? 1 else (cfg.dot.max-radius / 2) >? 1
+      .attr \r, (d) -> d.radius
       .attr \cx, (d) -> scale.x d.x
       .attr \cy, (d) -> scale.y d.y
       .attr \fill, (d) -> tint.get(if d.cat? => d.cat else '')
@@ -189,6 +405,26 @@ mod = ({context, t}) ->
         else (0.1 <? (cfg.dot.opacity/2))
       .attr \stroke, (d) -> cfg.dot.stroke
       .attr \stroke-width, (d) -> cfg.dot.strokeWidth
+
+    @g.view.selectAll \text.label .data(if @cfg.label.enabled => @data else [])
+      ..exit!remove!
+      ..enter!append \text
+        .attr \class, \label
+        .attr \dominant-baseline, \middle
+        .attr \text-anchor, \middle
+        .attr \transform, (d,i) -> "translate(#{d.px},#{d.py})"
+        .\attr \font-size, \.75em
+        .style \opacity, 0
+        .text (d,i) -> d.name
+
+    @g.view.selectAll \text.label
+      .each (d) ->
+        box = @.getBBox!
+        d.node.w = box.width
+        d.node.h = box.height
+    @g.view.selectAll \text.label
+      .transition!duration 350
+      .style \opacity, 1
 
     corr = _corr @data.filter (d,i) -> !(binding.cat?) or legend.is-selected(d.cat)
 
@@ -231,4 +467,11 @@ mod = ({context, t}) ->
     @legend.render!
     @yaxis.render!
     @xaxis.render!
+    if @cfg.label.enabled => @start!
 
+  tick: ->
+    {data, line, binding, scale, tint, legend, cfg} = @
+    if !@cfg.label.enabled => return
+    @_tick = (@_tick or 0) + 1
+    @g.view.selectAll \text.label
+      .attr \transform, (d) -> "translate(#{d.node.x},#{d.node.y})"
