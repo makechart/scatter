@@ -230,6 +230,7 @@ mod = ({context, t}) ->
       stroke-width: type: \number, default: 1, min: 0, max: 100, step: 0.5
     label:
       enabled: type: \boolean, default: false
+      font: {} <<< chart.utils.config.preset.font
     trend:
       enabled: type: \boolean, default: false
       stroke: type: \color, default: 'rgba(0,0,0,.3)'
@@ -409,15 +410,16 @@ mod = ({context, t}) ->
     @g.view.selectAll \text.label .data(if @cfg.label.enabled => @data else [])
       ..exit!remove!
       ..enter!append \text
-        .attr \class, \label
+        .attr \class, "label #{if cfg.label.font.family => (that.className or '') else ''}"
         .attr \dominant-baseline, \middle
         .attr \text-anchor, \middle
         .attr \transform, (d,i) -> "translate(#{d.px},#{d.py})"
-        .\attr \font-size, \.75em
         .style \opacity, 0
+        .attr \font-size, 0
         .text (d,i) -> d.name
 
     @g.view.selectAll \text.label
+      .attr \font-size, (cfg.label.font.size or \.75em)
       .each (d) ->
         box = @.getBBox!
         d.node.w = box.width
