@@ -121,6 +121,8 @@ mod = ({context, t}) ->
     @tip.toggle(if @cfg.{}tip.enabled? => @cfg.tip.enabled else true)
     @line.curve if @cfg.trend.mode == \curve => d3.curveCatmullRom else d3.curveLinear
     @root.querySelector('.pdl-layout').classList.toggle \legend-bottom, @cfg.legend.position == \bottom
+    @root.querySelector('.pdl-layout').classList.toggle \xaxis-center, @cfg.xaxis.center == true
+    @root.querySelector('.pdl-layout').classList.toggle \yaxis-center, @cfg.yaxis.center == true
     @legend.config @cfg.legend
     ticks = if !@binding.cat => []
     else Array.from(new Set(@data.map -> it.cat)).map -> {key: it, text: it}
