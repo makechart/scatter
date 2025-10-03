@@ -203,7 +203,7 @@ _corr = (data) ->
 mod = ({context, t}) ->
   {chart,d3,debounce} = context
   sample: ->
-    raw: [0 to 30].map (v) ~>
+    raw: [0 to 300].map (v) ~>
       name: "Node #v"
       x: Math.round(Math.random! * 100)
       y: Math.round(Math.random! * 100)
@@ -300,6 +300,13 @@ mod = ({context, t}) ->
       d.size = if isNaN(d.size) => 0 else d.size
       d.x = if isNaN(d.x) => 0 else d.x
       d.y = if isNaN(d.y) => 0 else d.y
+    xlist = @data.map (d) -> d.x
+    ylist = @data.map (d) -> d.y
+    xlist.sort (a,b) -> if a < b => -1 else if a > b => 1 else 0
+    ylist.sort (a,b) -> if a < b => -1 else if a > b => 1 else 0
+    @data.map (d) ->
+      d.x = xlist.indexOf(d.x)
+      d.y = ylist.indexOf(d.y)
     @nodes = @data.map (data) ->
       ret = {data}
       data.node = ret
