@@ -248,6 +248,7 @@ mod = ({context, t}) ->
       opacity: type: \number, default: 0.5, min: 0, max: 1, step: 0.01
   dimension:
     name: {type: \NC, name: "name"}
+    label: {type: \N, name: "label", desc: "text dedicated for showing in label. name will be used if omitted"}
     cat: {type: \C, name: "category"}
     size: {type: \R, name: "size"}
     x: {type: \R, name: "X coordinate"}
@@ -423,10 +424,10 @@ mod = ({context, t}) ->
         .attr \transform, (d,i) -> "translate(#{d.px},#{d.py})"
         .style \opacity, 0
         .attr \font-size, 0
-        .text (d,i) -> d.name
 
     @g.view.selectAll \text.label
       .attr \font-size, (cfg.label.font.size or \.75em)
+      .text (d,i) ~> if @binding.label => (d.label or '') else (d.name or '')
       .each (d) ->
         box = @.getBBox!
         d.node.w = box.width
