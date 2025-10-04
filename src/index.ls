@@ -205,26 +205,17 @@ mod = ({context, t}) ->
   sample: ->
     raw: [0 to 300].map (v) ~>
       type = Math.floor(Math.random! * 5)
-      p = if type == 0 =>
-        x: Math.round(Math.random! * 100)
-        y: Math.round(Math.random! * 100)
-        s: Math.round(Math.random! * 3) + 3
-      else if type == 1 =>
-        x: Math.round(Math.random! * 50 + 50)
-        y: Math.round(Math.random! * 50 + 50)
-        s: Math.round(Math.random! * 7) + 2
-      else if type == 2 =>
-        x: Math.round(Math.random! * 30 + 20)
-        y: Math.round(Math.random! * 60 + 40)
-        s: Math.round(Math.random! * 2) + 3
-      else if type == 3 =>
-        x: Math.round(Math.random! * 80 + 20)
-        y: Math.round(Math.random! * 30 + 30)
-        s: Math.round(Math.random! * 2) + 2
-      else if type == 4 =>
-        x: Math.round(Math.random! * 30 + 10)
-        y: Math.round(Math.random! * 30 + 10)
-        s: Math.round(Math.random! * 3) + 4
+      args = [
+        [0 100 0 100 3 3]
+        [50 50 50 50 7 2]
+        [30 20 60 40 2 3]
+        [80 20 30 30 2 2]
+        [30 10 30 10 3 4]
+      ]
+      p =
+        x: Math.round(Math.random! * args[type].0 + args[type].1)
+        y: Math.round(Math.random! * args[type].2 + args[type].3)
+        s: Math.round(Math.random! * args[type].4 + args[type].5)
       p <<<
         name: "Node #v"
         c: <[Apple Banana Peach Melon Orange]>[type]
@@ -286,6 +277,13 @@ mod = ({context, t}) ->
     y: {type: \R, name: "Y coordinate"}
     order: {type: \O, name: "Order"}
   init: ->
+    @focus-mode = enabled: false, names: []
+    @on \focus, (o = {}) ~>
+      @focus-mode.names = names = (if Array.isArray(o.names) => o.names else [o.names]).filter -> it
+      @focus-mode.enabled = !!names.length
+      if @parsed => @render!
+    @dimed = (d) ~>
+      !((!(@binding.cat?) or @legend.is-selected d.cat) and !(@focus-mode.enabled and !d.focused))
     @label-force = get-label-force d3
     @tint = tint = new chart.utils.tint!
     @sim = d3.forceSimulation!
@@ -431,6 +429,8 @@ mod = ({context, t}) ->
 
   render: ->
     {data, line, binding, scale, tint, legend, cfg} = @
+    @parsed.map (d) ~>
+      d.focused = if !@focus-mode.names.length => true else ( d.name in @focus-mode.names )
     @g.view.selectAll \circle.data .data @parsed
       ..exit!remove!
       ..enter!append \circle
@@ -447,9 +447,9 @@ mod = ({context, t}) ->
       .attr \cx, (d) -> scale.x d.x
       .attr \cy, (d) -> scale.y d.y
       .attr \fill, (d) -> tint.get(if d.cat? => d.cat else '')
-      .attr \opacity, (d) ->
-        if !(binding.cat?) or legend.is-selected d.cat => (cfg.dot.opacity >? 0.1)
-        else (0.1 <? (cfg.dot.opacity/2))
+      .attr \opacity, (d) ~>
+        if @dimed(d) => 0.1 <? (cfg.dot.opacity / 2)
+        else cfg.dot.opacity >? 0.1
       .attr \stroke, (d) -> cfg.dot.stroke
       .attr \stroke-width, (d) -> cfg.dot.strokeWidth
 
@@ -475,7 +475,7 @@ mod = ({context, t}) ->
         d.node.h = box.height
     @g.view.selectAll \text.label
       .transition!duration 350
-      .style \opacity, (d) -> if d.label-capped => 0 else 1
+      .style \opacity, (d) ~> if @dimed(d) or d.label-capped => 0 else 1
 
     corr = _corr @parsed.filter (d,i) -> !(binding.cat?) or legend.is-selected(d.cat)
 
