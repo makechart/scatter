@@ -5,6 +5,7 @@
  - support centered axes
  - support dynamic labels
  - support label configurations
+ - add label dimension for showing customized text in label
 
 
 ## v0.0.1
