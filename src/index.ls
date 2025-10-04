@@ -228,9 +228,19 @@ mod = ({context, t}) ->
       opacity: type: \number, default: 0.75, min: 0, max: 1, step: 0.01
       stroke: type: \color, default: \#000
       stroke-width: type: \number, default: 1, min: 0, max: 100, step: 0.5
+    # the result of force-label-rect-band isn't good enough, sometimes labels just overlap with nodes.
+    # so we by default hide this option.
+    /*
     label:
       enabled: type: \boolean, default: false
       font: {} <<< chart.utils.config.preset.font
+      cap:
+        type: \quantity, default: \100p
+        units:
+          * name: \﹪, max: 100, min: 0, step: 1, default: 10
+          * name: \pts, step: 1, default: 100
+    */
+
     trend:
       enabled: type: \boolean, default: false
       stroke: type: \color, default: 'rgba(0,0,0,.3)'
@@ -297,22 +307,26 @@ mod = ({context, t}) ->
     }
   destroy: -> if @tip => @tip.destroy!
   parse: ->
-    @data.map (d) ->
-      d.size = if isNaN(d.size) => 0 else d.size
-      d.x = if isNaN(d.x) => 0 else d.x
-      d.y = if isNaN(d.y) => 0 else d.y
-    xlist = @data.map (d) -> d.x
-    ylist = @data.map (d) -> d.y
-    xlist.sort (a,b) -> if a < b => -1 else if a > b => 1 else 0
-    ylist.sort (a,b) -> if a < b => -1 else if a > b => 1 else 0
-    @data.map (d) ->
-      d.x = xlist.indexOf(d.x)
-      d.y = ylist.indexOf(d.y)
-    @nodes = @data.map (data) ->
+    @parsed = @data.map (d) ->
+      ret = {} <<< d
+      ret.size = if isNaN(d.size) => 0 else d.size
+      ret.x = if isNaN(d.x) => 0 else d.x
+      ret.y = if isNaN(d.y) => 0 else d.y
+      ret
+    @parsed.sort (a,b) -> if a.size < b.size => -1 else if a.size > b.size => 1 else 0
+
+  resize: ->
+    ret = /(\d+)(\D+)/.exec((@cfg.label or {}).cap)
+    if ret =>
+      len = +ret.1
+      if ret.2 == \﹪ => len = Math.round(len * @parsed.length / 100)
+    else len = @parsed.length
+    @parsed.map (d,i) -> d.label-capped = i > len
+    @nodes = @parsed.map (data) ->
       ret = {data}
       data.node = ret
       ret
-  resize: ->
+
     @tint.set @cfg.palette
     @tip.toggle(if @cfg.{}tip.enabled? => @cfg.tip.enabled else true)
     @line.curve if @cfg.trend.mode == \curve => d3.curveCatmullRom else d3.curveLinear
@@ -321,13 +335,13 @@ mod = ({context, t}) ->
     @root.querySelector('.pdl-layout').classList.toggle \yaxis-center, @cfg.yaxis.center == true
     @legend.config @cfg.legend
     ticks = if !@binding.cat => []
-    else Array.from(new Set(@data.map -> it.cat)).map -> {key: it, text: it}
+    else Array.from(new Set(@parsed.map -> it.cat)).map -> {key: it, text: it}
     @legend.data ticks
     @layout.update false
     ext =
-      y: d3.extent @data.map(-> it.y)
-      x: d3.extent @data.map(-> it.x)
-      s: d3.extent @data.map(-> it.size)
+      y: d3.extent @parsed.map(-> it.y)
+      x: d3.extent @parsed.map(-> it.x)
+      s: d3.extent @parsed.map(-> it.size)
 
     axising = ~>
       @layout.update false
@@ -361,21 +375,23 @@ mod = ({context, t}) ->
       @xaxis.render!
 
     for i from 0 til 2 => axising!
-    @data.map (d) ~>
+    @parsed.map (d) ~>
       d.radius = if @binding.size? => @scale.s(d.size) >? 1 else (@cfg.dot.max-radius / 2) >? 1
       d.px = @scale.x d.x
       d.py = @scale.y d.y
     @sim.nodes @nodes
 
     box = @layout.get-box \view
-    if @cfg.label.enabled =>
+    # the result of force-label-rect-band isn't good enough, sometimes labels just overlap with nodes.
+    # so we by default hide this option.
+    if (@cfg.label or {}).enabled =>
       @sim
         .force \label, @label-force do
-          band-margin: 5
+          band-margin: 0
           rect-pad: 2       # 文字框留白
           circle-pad: 2     # 文字框對圓的額外留白
-          k-band: 0.35
-          k-collide: 3.7
+          k-band: 2.35
+          k-collide: 13.7
           it-rect: 2
           it-circle: 1
           k-alignx: 0.02      # ★ X 置中力（可依視覺調強弱）
@@ -393,7 +409,7 @@ mod = ({context, t}) ->
 
   render: ->
     {data, line, binding, scale, tint, legend, cfg} = @
-    @g.view.selectAll \circle.data .data @data
+    @g.view.selectAll \circle.data .data @parsed
       ..exit!remove!
       ..enter!append \circle
         .attr \class, \data
@@ -415,10 +431,12 @@ mod = ({context, t}) ->
       .attr \stroke, (d) -> cfg.dot.stroke
       .attr \stroke-width, (d) -> cfg.dot.strokeWidth
 
-    @g.view.selectAll \text.label .data(if @cfg.label.enabled => @data else [])
+    @g.view.selectAll \text.label .data(if (@cfg.label or {}).enabled => @parsed else [])
       ..exit!remove!
       ..enter!append \text
-        .attr \class, "label #{if cfg.label.font.family => (that.className or '') else ''}"
+        .attr \class, ->
+          family = ((cfg.label or {}).font or {}).family
+          "label #{if family => that.className or '' else ''}"
         .attr \dominant-baseline, \middle
         .attr \text-anchor, \middle
         .attr \transform, (d,i) -> "translate(#{d.px},#{d.py})"
@@ -426,7 +444,8 @@ mod = ({context, t}) ->
         .attr \font-size, 0
 
     @g.view.selectAll \text.label
-      .attr \font-size, (cfg.label.font.size or \.75em)
+      .attr \font-size, (((cfg.label or {}).font or {}).size or \.75em)
+      .style \pointer-events, (d) -> if d.label-capped => \none else ''
       .text (d,i) ~> if @binding.label => (d.label or '') else (d.name or '')
       .each (d) ->
         box = @.getBBox!
@@ -434,9 +453,9 @@ mod = ({context, t}) ->
         d.node.h = box.height
     @g.view.selectAll \text.label
       .transition!duration 350
-      .style \opacity, 1
+      .style \opacity, (d) -> if d.label-capped => 0 else 1
 
-    corr = _corr @data.filter (d,i) -> !(binding.cat?) or legend.is-selected(d.cat)
+    corr = _corr @parsed.filter (d,i) -> !(binding.cat?) or legend.is-selected(d.cat)
 
     [x1, x2] = scale.x.domain!
     [y1, y2] = [x1,x2].map -> it * corr.1 + corr.0
@@ -477,11 +496,11 @@ mod = ({context, t}) ->
     @legend.render!
     @yaxis.render!
     @xaxis.render!
-    if @cfg.label.enabled => @start!
+    if (@cfg.label or {}).enabled => @start!
 
   tick: ->
     {data, line, binding, scale, tint, legend, cfg} = @
-    if !@cfg.label.enabled => return
+    if !(@cfg.label or {}).enabled => return
     @_tick = (@_tick or 0) + 1
     @g.view.selectAll \text.label
       .attr \transform, (d) -> "translate(#{d.node.x},#{d.node.y})"
