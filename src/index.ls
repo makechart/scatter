@@ -204,12 +204,32 @@ mod = ({context, t}) ->
   {chart,d3,debounce} = context
   sample: ->
     raw: [0 to 300].map (v) ~>
-      name: "Node #v"
-      x: Math.round(Math.random! * 100)
-      y: Math.round(Math.random! * 100)
-      s: Math.round(Math.random! * 10) + 5
-      c: <[Apple Banana Peach Melon Orange]>[Math.floor(Math.random! * 5)]
-      o: v
+      type = Math.floor(Math.random! * 5)
+      p = if type == 0 =>
+        x: Math.round(Math.random! * 100)
+        y: Math.round(Math.random! * 100)
+        s: Math.round(Math.random! * 3) + 3
+      else if type == 1 =>
+        x: Math.round(Math.random! * 50 + 50)
+        y: Math.round(Math.random! * 50 + 50)
+        s: Math.round(Math.random! * 7) + 2
+      else if type == 2 =>
+        x: Math.round(Math.random! * 30 + 20)
+        y: Math.round(Math.random! * 60 + 40)
+        s: Math.round(Math.random! * 2) + 3
+      else if type == 3 =>
+        x: Math.round(Math.random! * 80 + 20)
+        y: Math.round(Math.random! * 30 + 30)
+        s: Math.round(Math.random! * 2) + 2
+      else if type == 4 =>
+        x: Math.round(Math.random! * 30 + 10)
+        y: Math.round(Math.random! * 30 + 10)
+        s: Math.round(Math.random! * 3) + 4
+      p <<<
+        name: "Node #v"
+        c: <[Apple Banana Peach Melon Orange]>[type]
+        o: v
+
     binding:
       x: {key: \x, unit: 'KM'}
       y: {key: \y, unit: 'KG'}
@@ -224,7 +244,8 @@ mod = ({context, t}) ->
     yaxis: JSON.parse(JSON.stringify(chart.utils.config.preset.axis))
   } <<< chart.utils.config.preset.default <<< do
     dot:
-      max-radius: type: \number, default: 10, min: 0.1, max: 100, step: 0.1
+      min-radius: name: "min radius", type: \number, default: 1, min: 0.0, max: 100, step: 0.1
+      max-radius: name: "max radius", type: \number, default: 6, min: 0.1, max: 100, step: 0.1
       opacity: type: \number, default: 0.75, min: 0, max: 1, step: 0.01
       stroke: type: \color, default: \#000
       stroke-width: type: \number, default: 1, min: 0, max: 100, step: 0.5
@@ -346,10 +367,11 @@ mod = ({context, t}) ->
     axising = ~>
       @layout.update false
       box = @layout.get-box \view
-      maxr = @cfg.dot.max-radius * box.width * 0.2 / 100
+      maxr = (@cfg.dot.max-radius or 6) * box.width * 0.2 / 100
+      minr = (@cfg.dot.min-radius or 0) * box.width * 0.2 / 100
       pad = maxr + @cfg.dot.stroke-width
 
-      @scale.s = d3.scaleSqrt!domain(ext.s).range [0, maxr]
+      @scale.s = d3.scaleSqrt!domain(ext.s).range [minr, maxr]
       @scale.y = d3.scaleLinear!domain(ext.y).range [box.height - pad, pad]
       max-tick = Math.ceil(@layout.get-box \yaxis .height / 16) >? 2
       yticks = @scale.y.ticks((@cfg.{}xaxis.tick.count or 4) <? max-tick)
