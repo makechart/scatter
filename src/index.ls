@@ -231,7 +231,8 @@ mod = ({context, t}) ->
   config: {
     legend: {} <<< chart.utils.config.preset.legend
     tip: {} <<< chart.utils.config.preset.tip
-    xaxis: JSON.parse(JSON.stringify(chart.utils.config.preset.axis))
+    xaxis: JSON.parse(JSON.stringify(chart.utils.config.preset.axis)) <<< do
+      scale: type: \choice, defalut: \linear, values: [{name: \linear, value: \linear}, {name: \PR, value: \pr}]
     yaxis: JSON.parse(JSON.stringify(chart.utils.config.preset.axis))
   } <<< chart.utils.config.preset.default <<< do
     dot:
@@ -312,16 +313,17 @@ mod = ({context, t}) ->
     @tip = new chart.utils.tip {
       root: @root
       accessor: ({evt}) ~>
+        format = chart.util.format.from @cfg.tip.format or \.3s
         if !(evt.target and data = d3.select(evt.target).datum!) => return null
         v = if isNaN(data.size) => '-'
-        else "#{d3.format(@cfg.tip.format or '.3s')(data.size)}#{((@binding or {}).size or {}).unit or ''}"
+        else "#{format data.size}#{((@binding or {}).size or {}).unit or ''}"
         return do
           name: [
             if data.cat? => "#{data.cat} / " else ''
             (data.name or '')
             if data.order => " / #{data.order}" else ''
           ].join('')
-          value: v
+          value: if @binding.size => v else '-'
       range: ~> @layout.get-node \view .getBoundingClientRect!
     }
   destroy: -> if @tip => @tip.destroy!
@@ -329,12 +331,23 @@ mod = ({context, t}) ->
     @parsed = @data.map (d) ->
       ret = {} <<< d
       ret.size = if isNaN(d.size) => 0 else d.size
-      ret.x = if isNaN(d.x) => 0 else d.x
-      ret.y = if isNaN(d.y) => 0 else d.y
+      ret.x = ret._raw_x = if isNaN(d.x) => 0 else d.x
+      ret.y = ret._raw_y = if isNaN(d.y) => 0 else d.y
       ret
     @parsed.sort (a,b) -> if a.size < b.size => -1 else if a.size > b.size => 1 else 0
+    xlist = @parsed.map (d) -> d.x
+    ylist = @parsed.map (d) -> d.y
+    xlist.sort (a,b) -> if a < b => -1 else if a > b => 1 else 0
+    ylist.sort (a,b) -> if a < b => -1 else if a > b => 1 else 0
+    @parsed.map (d) ~>
+      d._rank_x = xlist.indexOf(d._raw_x)
+      d._pr_x = d._rank_x / (@parsed.length or 1)
+      d._rank_y = ylist.indexOf(d._raw_y)
+      d._pr_y = d._rank_y / (@parsed.length or 1)
 
   resize: ->
+    if @cfg.scale == \pr => @parsed.map (d) -> d <<< x: d._pr_x, y: d._pr_y
+    else @parsed.map (d) -> d <<< x: d._raw_x, y: d._raw_y
     ret = /(\d+)(\D+)/.exec((@cfg.label or {}).cap)
     if ret =>
       len = +ret.1
