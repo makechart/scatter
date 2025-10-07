@@ -232,8 +232,21 @@ mod = ({context, t}) ->
     legend: {} <<< chart.utils.config.preset.legend
     tip: {} <<< chart.utils.config.preset.tip
     xaxis: JSON.parse(JSON.stringify(chart.utils.config.preset.axis)) <<< do
-      scale: type: \choice, defalut: \linear, values: [{name: \linear, value: \linear}, {name: \PR, value: \pr}]
-    yaxis: JSON.parse(JSON.stringify(chart.utils.config.preset.axis))
+      scale:
+        type: \choice, defalut: \linear
+        values: [
+        * name: \Linear, value: \linear
+        * name: \PR, value: \pr
+        # * name: 'Log Scale', value: \log # requires symlog which isn't available in d3 v4
+        ]
+    yaxis: JSON.parse(JSON.stringify(chart.utils.config.preset.axis)) <<< do
+      scale:
+        type: \choice, defalut: \linear
+        values: [
+        * name: \Linear, value: \linear
+        * name: \PR, value: \pr
+        # * name: 'Log Scale', value: \log # requires symlog which isn't available in d3 v4
+        ]
   } <<< chart.utils.config.preset.default <<< do
     dot:
       min-radius: name: "min radius", type: \number, default: 1, min: 0.0, max: 100, step: 0.1
@@ -313,7 +326,7 @@ mod = ({context, t}) ->
     @tip = new chart.utils.tip {
       root: @root
       accessor: ({evt}) ~>
-        format = chart.util.format.from @cfg.tip.format or \.3s
+        format = chart.utils.format.from @cfg.tip.format or \.3s
         if !(evt.target and data = d3.select(evt.target).datum!) => return null
         v = if isNaN(data.size) => '-'
         else "#{format data.size}#{((@binding or {}).size or {}).unit or ''}"
@@ -346,8 +359,9 @@ mod = ({context, t}) ->
       d._pr_y = d._rank_y / (@parsed.length or 1)
 
   resize: ->
-    if @cfg.scale == \pr => @parsed.map (d) -> d <<< x: d._pr_x, y: d._pr_y
-    else @parsed.map (d) -> d <<< x: d._raw_x, y: d._raw_y
+    @parsed.map (d) -> d <<< x: d._raw_x, y: d._raw_y
+    if @cfg.xaxis.scale == \pr => @parsed.map (d) -> d <<< x: d._pr_x
+    if @cfg.yaxis.scale == \pr => @parsed.map (d) -> d <<< y: d._pr_y
     ret = /(\d+)(\D+)/.exec((@cfg.label or {}).cap)
     if ret =>
       len = +ret.1
@@ -383,7 +397,8 @@ mod = ({context, t}) ->
       pad = maxr + @cfg.dot.stroke-width
 
       @scale.s = d3.scaleSqrt!domain(ext.s).range [minr, maxr]
-      @scale.y = d3.scaleLinear!domain(ext.y).range [box.height - pad, pad]
+      @scale.y = if false and @cfg.yaxis.scale == \log => # need newer version of d3
+      else d3.scaleLinear!domain(ext.y).range [box.height - pad, pad]
       max-tick = Math.ceil(@layout.get-box \yaxis .height / 16) >? 2
       yticks = @scale.y.ticks((@cfg.{}xaxis.tick.count or 4) <? max-tick)
       ybind = (@binding.y or {})
@@ -395,7 +410,9 @@ mod = ({context, t}) ->
       @yaxis.caption ycap
       @yaxis.render!
 
-      @scale.x = d3.scaleLinear!domain(ext.x).range [pad, box.width - pad]
+      @scale.x = if false and @cfg.xaxis.scale == \log => # need newer version of d3
+        d3.scaleSymlog!domain(ext.x).range [pad, box.width - pad]
+      else d3.scaleLinear!domain(ext.x).range [pad, box.width - pad]
       max-tick = Math.ceil(@layout.get-box \xaxis .width / 80) >? 2
       xticks = @scale.x.ticks((@cfg.{}xaxis.tick.count or 4) <? max-tick)
       xbind = (@binding.x or {})
