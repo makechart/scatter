@@ -236,8 +236,8 @@ mod = ({context, t}) ->
         type: \choice, defalut: \linear
         values: [
         * name: \Linear, value: \linear
-        * name: \PR, value: \pr
-        # * name: 'Log Scale', value: \log # requires symlog which isn't available in d3 v4
+        * name: 'Percentile Rank', value: \pr
+        * name: 'Log Scale', value: \log
         ]
     yaxis: JSON.parse(JSON.stringify(chart.utils.config.preset.axis)) <<< do
       scale:
@@ -397,7 +397,8 @@ mod = ({context, t}) ->
       pad = maxr + @cfg.dot.stroke-width
 
       @scale.s = d3.scaleSqrt!domain(ext.s).range [minr, maxr]
-      @scale.y = if false and @cfg.yaxis.scale == \log => # need newer version of d3
+      @scale.y = if @cfg.yaxis.scale == \log =>
+        d3.scaleSymlog!domain(ext.y).range [box.height - pad, pad]
       else d3.scaleLinear!domain(ext.y).range [box.height - pad, pad]
       max-tick = Math.ceil(@layout.get-box \yaxis .height / 16) >? 2
       yticks = @scale.y.ticks((@cfg.{}xaxis.tick.count or 4) <? max-tick)
@@ -410,7 +411,7 @@ mod = ({context, t}) ->
       @yaxis.caption ycap
       @yaxis.render!
 
-      @scale.x = if false and @cfg.xaxis.scale == \log => # need newer version of d3
+      @scale.x = if @cfg.xaxis.scale == \log =>
         d3.scaleSymlog!domain(ext.x).range [pad, box.width - pad]
       else d3.scaleLinear!domain(ext.x).range [pad, box.width - pad]
       max-tick = Math.ceil(@layout.get-box \xaxis .width / 80) >? 2
