@@ -9,6 +9,7 @@
  - add `minRadius` option
  - support data range conversion (including Linear Scale, Percentile Rank and Log Scale)
  - use `charts.utils.format` instead of `d3.format`
+ - fix trend line rendering issue
 
 
 ## v0.0.1
