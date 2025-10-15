@@ -1,5 +1,10 @@
 # @makechart/scatter
 
+Config:
+
+ - `alignRange`: boolean. when true, X-axis and Y-axis shares the same value range.
+
+
 Events:
 
  - `focus`: highlight certain points by their name.

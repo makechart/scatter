@@ -10,6 +10,7 @@
  - support data range conversion (including Linear Scale, Percentile Rank and Log Scale)
  - use `charts.utils.format` instead of `d3.format`
  - fix trend line rendering issue
+ - add `align-range` config, which makes x-axis and y-axis use the same value range.
 
 
 ## v0.0.1
