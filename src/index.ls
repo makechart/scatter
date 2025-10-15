@@ -50,12 +50,17 @@ get-label-force = (d3) ->
         dx = px - cx; dy = py - cy
         dist = Math.hypot dx, dy
         if dist is 0
-          dx = d.x - cx; dy = d.y - cy
-          if dx is 0 and dy is 0
-            dx = (Math.random! - 0.5) * 1e-6
-            dy = (Math.random! - 0.5) * 1e-6
+          ps = [
+            [Math.abs((d.x - d.w/2) - cx), d.x - d.w/2 - target, d.y],
+            [Math.abs((d.x + d.w/2) - cx), d.x + d.w/2 + target, d.y],
+            [Math.abs((d.y - d.h/2) - cy), d.x, d.y - d.h/2 - target],
+            [Math.abs((d.y + d.h/2) - cy), d.x, d.y + d.h/2 + target]
+          ]
+          ps.sort (a,b) -> if a.0 < b.0 => -1 else if a.0 > b.0 => 1 else 0
+          dx = ps.0.1 - cx
+          dy = ps.0.2 - cy
           dist = Math.hypot dx, dy
-        if dist < target
+        if dist <= target
           k = (target - dist) / dist * (k-band * alpha)
           d.vx = (d.vx or 0) + dx * k
           d.vy = (d.vy or 0) + dy * k
@@ -245,7 +250,7 @@ mod = ({context, t}) ->
         values: [
         * name: \Linear, value: \linear
         * name: \PR, value: \pr
-        # * name: 'Log Scale', value: \log # requires symlog which isn't available in d3 v4
+        * name: 'Log Scale', value: \log
         ]
   } <<< chart.utils.config.preset.default <<< do
     dot:
@@ -255,8 +260,7 @@ mod = ({context, t}) ->
       stroke: type: \color, default: \#000
       stroke-width: type: \number, default: 1, min: 0, max: 100, step: 0.5
     # the result of force-label-rect-band isn't good enough, sometimes labels just overlap with nodes.
-    # so we by default hide this option.
-    /*
+    # so we show consider hiding this option.
     label:
       enabled: type: \boolean, default: false
       font: {} <<< chart.utils.config.preset.font
@@ -265,7 +269,6 @@ mod = ({context, t}) ->
         units:
           * name: \﹪, max: 100, min: 0, step: 1, default: 10
           * name: \pts, step: 1, default: 100
-    */
 
     trend:
       enabled: type: \boolean, default: false
@@ -430,6 +433,8 @@ mod = ({context, t}) ->
       d.radius = if @binding.size? => @scale.s(d.size) >? 1 else (@cfg.dot.max-radius / 2) >? 1
       d.px = @scale.x d.x
       d.py = @scale.y d.y
+
+    @nodes.map (n) -> n <<< {x: n.data.px, y: n.data.py}
     @sim.nodes @nodes
 
     box = @layout.get-box \view
@@ -438,14 +443,14 @@ mod = ({context, t}) ->
     if (@cfg.label or {}).enabled =>
       @sim
         .force \label, @label-force do
-          band-margin: 0
-          rect-pad: 2       # 文字框留白
+          band-margin: 2 + @cfg.dot.stroke-width
+          rect-pad: 4      # 文字框留白
           circle-pad: 2     # 文字框對圓的額外留白
-          k-band: 2.35
-          k-collide: 13.7
+          k-band: 1
+          k-collide: 1.0
           it-rect: 2
           it-circle: 1
-          k-alignx: 0.02      # ★ X 置中力（可依視覺調強弱）
+          k-alignx: 0.1      # ★ X 置中力（可依視覺調強弱）
           align-deadband: 1
           canvas-w: box.width
           canvas-h: box.height
@@ -453,13 +458,13 @@ mod = ({context, t}) ->
           k-bounds: 0.9        # 邊界力
       @sim
         .alpha 1
-        .alphaDecay 0.03
-        .velocityDecay 0.4
+        .alphaDecay 0.01
+        .velocityDecay 0.3
       @sim.restart!
 
 
   render: ->
-    {data, line, binding, scale, tint, legend, cfg} = @
+    {data, line, binding, scale, tint, legend, cfg, parsed} = @
     @parsed.map (d) ~>
       d.focused = if !@focus-mode.names.length => true else ( d.name in @focus-mode.names )
     @g.view.selectAll \circle.data .data @parsed
@@ -532,7 +537,7 @@ mod = ({context, t}) ->
       .attr \stroke-width, cfg.regression.strokeWidth
       .attr \stroke-dasharray, cfg.regression.strokeDasharray
 
-    sorted = data.map(-> it{x,y,order})
+    sorted = parsed.map(-> it{x,y,order})
     sorted.sort (a,b) -> if a.order < b.order => -1 else if a.o > b.o => 1 else 0
     @trend
       .attr \d, -> line sorted
