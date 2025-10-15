@@ -253,6 +253,8 @@ mod = ({context, t}) ->
         * name: 'Log Scale', value: \log
         ]
   } <<< chart.utils.config.preset.default <<< do
+    alignRange:
+      name: "align data range", type: \boolean, default: false
     dot:
       min-radius: name: "min radius", type: \number, default: 1, min: 0.0, max: 100, step: 0.1
       max-radius: name: "max radius", type: \number, default: 6, min: 0.1, max: 100, step: 0.1
@@ -391,7 +393,8 @@ mod = ({context, t}) ->
       y: d3.extent @parsed.map(-> it.y)
       x: d3.extent @parsed.map(-> it.x)
       s: d3.extent @parsed.map(-> it.size)
-
+    if @cfg.align-range =>
+      ext.y = ext.x = [Math.min.apply(Math, ext.y ++ ext.x), Math.max.apply(Math, ext.y ++ ext.x)]
     axising = ~>
       @layout.update false
       box = @layout.get-box \view
