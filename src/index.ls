@@ -430,8 +430,8 @@ mod = ({context, t}) ->
         ..exit!remove!
         ..enter!append \line
       @grid-y.selectAll \line
-        .attr \x1, pad
-        .attr \x2, box.width - pad
+        .attr \x1, 0
+        .attr \x2, box.width
         .attr \y1, (d) ~> @scale.y d
         .attr \y2, (d) ~> @scale.y d
         .attr \stroke, (@cfg.yaxis.grid or {}).color or 'rgba(0,0,0,0.1)'
@@ -460,8 +460,8 @@ mod = ({context, t}) ->
       @grid-x.selectAll \line
         .attr \x1, (d) ~> @scale.x d
         .attr \x2, (d) ~> @scale.x d
-        .attr \y1, pad
-        .attr \y2, box.height - pad
+        .attr \y1, 0
+        .attr \y2, box.height
         .attr \stroke, (@cfg.xaxis.grid or {}).color or 'rgba(0,0,0,0.1)'
         .attr \stroke-width, (@cfg.xaxis.grid or {}).strokeWidth or 1
         .attr \stroke-dasharray, (@cfg.xaxis.grid or {}).strokeDasharray or ''
