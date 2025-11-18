@@ -1,6 +1,8 @@
 div
   style(type="text/css"): include:stylus index.styl
-  script(type="@plotdb/block"): include:lsc index.ls
+  script(type="@plotdb/block")
+    include:lsc scale-pr.ls
+    include:lsc index.ls
   div(plug="layout")
     .pdl-layout
       div(data-type="layout")

@@ -1,3 +1,5 @@
+#scale-pr = require './scale-pr'
+
 get-label-force = (d3) ->
   # helpers -----------------------------------------------------
   clamp = (v, lo, hi) -> if v < lo then lo else if v > hi then hi else v
@@ -353,20 +355,13 @@ mod = ({context, t}) ->
       ret.y = ret._raw_y = if isNaN(d.y) => 0 else d.y
       ret
     @parsed.sort (a,b) -> if a.size < b.size => -1 else if a.size > b.size => 1 else 0
-    xlist = @parsed.map (d) -> d.x
-    ylist = @parsed.map (d) -> d.y
-    xlist.sort (a,b) -> if a < b => -1 else if a > b => 1 else 0
-    ylist.sort (a,b) -> if a < b => -1 else if a > b => 1 else 0
-    @parsed.map (d) ~>
-      d._rank_x = xlist.indexOf(d._raw_x)
-      d._pr_x = d._rank_x / (@parsed.length or 1)
-      d._rank_y = ylist.indexOf(d._raw_y)
-      d._pr_y = d._rank_y / (@parsed.length or 1)
+    @xlist = @parsed.map (d) -> d.x
+    @ylist = @parsed.map (d) -> d.y
+    @xlist.sort (a,b) -> if a < b => -1 else if a > b => 1 else 0
+    @ylist.sort (a,b) -> if a < b => -1 else if a > b => 1 else 0
 
   resize: ->
     @parsed.map (d) -> d <<< x: d._raw_x, y: d._raw_y
-    if @cfg.xaxis.scale == \pr => @parsed.map (d) -> d <<< x: d._pr_x
-    if @cfg.yaxis.scale == \pr => @parsed.map (d) -> d <<< y: d._pr_y
     ret = /(\d+)(\D+)/.exec((@cfg.label or {}).cap)
     if ret =>
       len = +ret.1
@@ -403,9 +398,10 @@ mod = ({context, t}) ->
       pad = maxr + @cfg.dot.stroke-width
 
       @scale.s = d3.scaleSqrt!domain(ext.s).range [minr, maxr]
-      @scale.y = if @cfg.yaxis.scale == \log =>
-        d3.scaleSymlog!domain(ext.y).range [box.height - pad, pad]
-      else d3.scaleLinear!domain(ext.y).range [box.height - pad, pad]
+      @scale.y = switch @cfg.yaxis.scale
+        | \log => d3.scaleSymlog!domain(ext.y).range [box.height - pad, pad]
+        | \pr => scale-pr {clamp: true} .domain(@ylist).range [box.height - pad, pad]
+        | _ => d3.scaleLinear!domain(ext.y).range [box.height - pad, pad]
       max-tick = Math.ceil(@layout.get-box \yaxis .height / 16) >? 2
       yticks = @scale.y.ticks((@cfg.{}xaxis.tick.count or 4) <? max-tick)
       ybind = (@binding.y or {})
@@ -417,9 +413,10 @@ mod = ({context, t}) ->
       @yaxis.caption ycap
       @yaxis.render!
 
-      @scale.x = if @cfg.xaxis.scale == \log =>
-        d3.scaleSymlog!domain(ext.x).range [pad, box.width - pad]
-      else d3.scaleLinear!domain(ext.x).range [pad, box.width - pad]
+      @scale.x = switch @cfg.xaxis.scale
+        | \log => d3.scaleSymlog!domain(ext.x).range [pad, box.width - pad]
+        | \pr => scale-pr {clamp: true} .domain(@xlist).range [pad, box.width - pad]
+        | _ => d3.scaleLinear!domain(ext.x).range [pad, box.width - pad]
       max-tick = Math.ceil(@layout.get-box \xaxis .width / 80) >? 2
       xticks = @scale.x.ticks((@cfg.{}xaxis.tick.count or 4) <? max-tick)
       xbind = (@binding.x or {})
