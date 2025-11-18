@@ -246,6 +246,11 @@ mod = ({context, t}) ->
         * name: 'Percentile Rank', value: \pr
         * name: 'Log Scale', value: \log
         ]
+      grid:
+        enabled: type: \boolean, default: false
+        color: type: \color, default: 'rgba(0,0,0,0.1)'
+        stroke-width: type: \number, default: 1, min: 0, max: 10, step: 0.5
+        stroke-dasharray: type: \text, default: ''
     yaxis: JSON.parse(JSON.stringify(chart.utils.config.preset.axis)) <<< do
       scale:
         type: \choice, defalut: \linear
@@ -254,6 +259,11 @@ mod = ({context, t}) ->
         * name: \PR, value: \pr
         * name: 'Log Scale', value: \log
         ]
+      grid:
+        enabled: type: \boolean, default: false
+        color: type: \color, default: 'rgba(0,0,0,0.1)'
+        stroke-width: type: \number, default: 1, min: 0, max: 10, step: 0.5
+        stroke-dasharray: type: \text, default: ''
   } <<< chart.utils.config.preset.default <<< do
     alignRange:
       name: "align data range", type: \boolean, default: false
@@ -309,6 +319,8 @@ mod = ({context, t}) ->
     @tint = tint = new chart.utils.tint!
     @sim = d3.forceSimulation!
     @g = Object.fromEntries <[view xaxis yaxis legend]>.map ~> [it, d3.select(@layout.get-group it)]
+    @grid-x = @g.view.append \g .attr(\class, \grid-x)
+    @grid-y = @g.view.append \g .attr(\class, \grid-y)
     @regression = @g.view.append \line .attr(\opacity, 0) .attr(\class, \regression)
     @trend = @g.view.append \path .attr(\opacity, 0) .attr(\class, \trend)
     @trend-ani = @trend.append \animate
@@ -413,6 +425,19 @@ mod = ({context, t}) ->
       @yaxis.caption ycap
       @yaxis.render!
 
+      # Y-axis grid (horizontal lines)
+      @grid-y.selectAll \line .data(if (@cfg.yaxis.grid or {}).enabled => yticks else [])
+        ..exit!remove!
+        ..enter!append \line
+      @grid-y.selectAll \line
+        .attr \x1, pad
+        .attr \x2, box.width - pad
+        .attr \y1, (d) ~> @scale.y d
+        .attr \y2, (d) ~> @scale.y d
+        .attr \stroke, (@cfg.yaxis.grid or {}).color or 'rgba(0,0,0,0.1)'
+        .attr \stroke-width, (@cfg.yaxis.grid or {}).strokeWidth or 1
+        .attr \stroke-dasharray, (@cfg.yaxis.grid or {}).strokeDasharray or ''
+
       @scale.x = switch @cfg.xaxis.scale
         | \log => d3.scaleSymlog!domain(ext.x).range [pad, box.width - pad]
         | \pr => scale-pr {clamp: true} .domain(@xlist).range [pad, box.width - pad]
@@ -427,6 +452,19 @@ mod = ({context, t}) ->
       if xbind.unit => xcap += "(#{xbind.unit})"
       @xaxis.caption xcap
       @xaxis.render!
+
+      # X-axis grid (vertical lines)
+      @grid-x.selectAll \line .data(if (@cfg.xaxis.grid or {}).enabled => xticks else [])
+        ..exit!remove!
+        ..enter!append \line
+      @grid-x.selectAll \line
+        .attr \x1, (d) ~> @scale.x d
+        .attr \x2, (d) ~> @scale.x d
+        .attr \y1, pad
+        .attr \y2, box.height - pad
+        .attr \stroke, (@cfg.xaxis.grid or {}).color or 'rgba(0,0,0,0.1)'
+        .attr \stroke-width, (@cfg.xaxis.grid or {}).strokeWidth or 1
+        .attr \stroke-dasharray, (@cfg.xaxis.grid or {}).strokeDasharray or ''
 
     for i from 0 til 2 => axising!
     @parsed.map (d) ~>
