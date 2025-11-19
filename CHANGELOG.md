@@ -1,6 +1,6 @@
 # Change Logs
 
-## v0.0.2 (upcoming)
+## v0.0.2
 
  - support centered axes
  - support dynamic labels
