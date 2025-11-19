@@ -1,9 +1,8 @@
-# scale-pr: adopted frmo @makechart/pr before it's published.
-# consider using it as a module after it's published.
 scale-pr = (opt = {}) ->
   domain-vals = []
   range-vals = [0, 1]
   do-clamp = if opt.clamp? then !!opt.clamp else false
+  tie-method = opt.tie or 'min'  # 'min' | 'max' | 'average'
 
   sorted = []
   counts = []
@@ -33,6 +32,20 @@ scale-pr = (opt = {}) ->
 
     total := s
 
+  # helper to get rank position for a value at index using tie-method
+  get-rank-pos = (idx) ->
+    switch tie-method
+    | 'min' =>
+        if idx is 0 then 0 else cumulative[idx - 1]
+    | 'max' =>
+        cumulative[idx] - 1
+    | 'average' =>
+        first = if idx is 0 then 0 else cumulative[idx - 1]
+        last = cumulative[idx] - 1
+        (first + last) / 2
+    | otherwise =>
+        if idx is 0 then 0 else cumulative[idx - 1]
+
   rank-of = (x) ->
     if sorted.length is 0 => return 0
     if total <= 1 => return 0
@@ -50,7 +63,8 @@ scale-pr = (opt = {}) ->
     pos = lo
 
     ci = if sorted[pos] is x
-      cumulative[pos] - 1
+      # exact match
+      get-rank-pos pos
     else if pos is 0
       # extrapolate below min using first two values
       if sorted.length < 2
@@ -74,8 +88,8 @@ scale-pr = (opt = {}) ->
       # interpolate between sorted[pos-1] and sorted[pos]
       v0 = sorted[pos - 1]
       v1 = sorted[pos]
-      c0 = cumulative[pos - 1] - 1
-      c1 = cumulative[pos] - 1
+      c0 = get-rank-pos (pos - 1)
+      c1 = get-rank-pos pos
       t = (x - v0) / (v1 - v0)
       c0 + (c1 - c0) * t
 
@@ -132,6 +146,11 @@ scale-pr = (opt = {}) ->
     do-clamp := !!v
     return scale
 
+  scale.tie = (v) ->
+    if !v? => return tie-method
+    tie-method := v
+    return scale
+
   scale.ticks = (count = 10) ->
     if sorted.length is 0 => return []
 
@@ -161,7 +180,7 @@ scale-pr = (opt = {}) ->
     return ticks
 
   scale._debug = ->
-    { sorted, counts, cumulative, total, do-clamp }
+    { sorted, counts, cumulative, total, do-clamp, 'tie-method': tie-method }
 
   return scale
 
