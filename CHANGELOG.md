@@ -1,5 +1,10 @@
 # Change Logs
 
+## v0.0.3
+
+ - support tie method in scale-pr
+
+
 ## v0.0.2
 
  - support centered axes
