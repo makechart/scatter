@@ -186,8 +186,15 @@ get-label-force = (d3) ->
 
 module.exports =
   pkg:
-    extend: {name: "@makechart/base"}
-    dependencies: []
+    # lite: 不帶 d3 的 base. 補間改用 chart.anim, 可以逐格錄影 ( 見 @plotdb/chart utils/anim )
+    extend: {name: "@makechart/base", path: "lite/index.html"}
+    # 標籤排版用 d3-force / d3-quadtree ( 不需要 d3 core, 依相依順序載入 )
+    dependencies: [
+    * name: \d3-dispatch, version: "3.0.1", path: "dist/d3-dispatch.min.js", async: false
+    * name: \d3-quadtree, version: "3.0.1", path: "dist/d3-quadtree.min.js", async: false
+    * name: \d3-timer, version: "3.0.1", path: "dist/d3-timer.min.js", async: false
+    * name: \d3-force, version: "3.0.0", path: "dist/d3-force.min.js", async: false
+    ]
   init: ({root, context, t, pubsub}) ->
     pubsub.fire \init, mod: mod({context, t})
 
@@ -209,6 +216,14 @@ _corr = (data) ->
 
 mod = ({context, t}) ->
   {chart,d3,debounce} = context
+  {scale: Scale, shape, anim: {join}} = chart.utils
+  svgns = "http://www.w3.org/2000/svg"
+  mk = (p, tag) -> p.appendChild document.createElementNS(svgns, tag)
+  attrs = (n, o) -> for k, v of o => n.setAttribute k, v
+  # 同 d3.extent: 略過 null / NaN
+  extent = (list) ->
+    vs = list.filter -> it? and it >= it
+    if vs.length => [Math.min.apply(Math, vs), Math.max.apply(Math, vs)] else [undefined, undefined]
   sample: ->
     raw: [0 to 300].map (v) ~>
       type = Math.floor(Math.random! * 5)
@@ -318,21 +333,22 @@ mod = ({context, t}) ->
     @label-force = get-label-force d3
     @tint = tint = new chart.utils.tint!
     @sim = d3.forceSimulation!
-    @g = Object.fromEntries <[view xaxis yaxis legend]>.map ~> [it, d3.select(@layout.get-group it)]
-    @grid-x = @g.view.append \g .attr(\class, \grid-x)
-    @grid-y = @g.view.append \g .attr(\class, \grid-y)
-    @regression = @g.view.append \line .attr(\opacity, 0) .attr(\class, \regression)
-    @trend = @g.view.append \path .attr(\opacity, 0) .attr(\class, \trend)
-    @trend-ani = @trend.append \animate
-      .attr \attributeName, \stroke-dashoffset
-      .attr \repeatCount, \indefinite
-      .attr \dur, \1s
-      .attr \values, "0;1"
-      .attr \times, "0;1"
+    @sim.stop!
+    @g = Object.fromEntries <[view xaxis yaxis legend]>.map ~> [it, @layout.get-group it]
+    @grid-x = mk @g.view, \g
+      ..setAttribute \class, \grid-x
+    @grid-y = mk @g.view, \g
+      ..setAttribute \class, \grid-y
+    @regression = mk @g.view, \line
+    attrs @regression, {opacity: 0, class: \regression}
+    @trend = mk @g.view, \path
+    attrs @trend, {opacity: 0, class: \trend}
+    @trend-ani = mk @trend, \animate
+    attrs @trend-ani, attributeName: \stroke-dashoffset, repeatCount: \indefinite, dur: \1s, values: "0;1", times: "0;1"
     @scale = scale = {}
     @yaxis = new chart.utils.axis layout: @layout, name: \yaxis, direction: \left
     @xaxis = new chart.utils.axis layout: @layout, name: \xaxis, direction: \bottom
-    @line = d3.line!
+    @line = shape.line!
       .defined (d) ~> !(isNaN(d.y) or isNaN(d.x))
       .x (d) ~> @scale.x d.x
       .y (d) ~> @scale.y d.y
@@ -340,13 +356,13 @@ mod = ({context, t}) ->
       layout: @layout
       name: \legend
       root: @root
-      shape: (d) -> d3.select(@).attr \fill, tint.get d.key
+      shape: (d) -> @setAttribute \fill, tint.get d.key
     @legend.on \select, ~> @bind!; @resize!; @render!
     @tip = new chart.utils.tip {
       root: @root
       accessor: ({evt}) ~>
         format = chart.utils.format.from @cfg.tip.format or \.3s
-        if !(evt.target and data = d3.select(evt.target).datum!) => return null
+        if !(evt.target and data = evt.target.__data__) => return null
         v = if isNaN(data.size) => '-'
         else "#{format data.size}#{((@binding or {}).size or {}).unit or ''}"
         return do
@@ -387,7 +403,7 @@ mod = ({context, t}) ->
 
     @tint.set @cfg.palette
     @tip.toggle(if @cfg.{}tip.enabled? => @cfg.tip.enabled else true)
-    @line.curve if @cfg.trend.mode == \curve => d3.curveCatmullRom else d3.curveLinear
+    @line.curve if @cfg.trend.mode == \curve => shape.curve.catmull-rom else shape.curve.linear
     @root.querySelector('.pdl-layout').classList.toggle \legend-bottom, @cfg.legend.position == \bottom
     @root.querySelector('.pdl-layout').classList.toggle \xaxis-center, @cfg.xaxis.center == true
     @root.querySelector('.pdl-layout').classList.toggle \yaxis-center, @cfg.yaxis.center == true
@@ -397,9 +413,9 @@ mod = ({context, t}) ->
     @legend.data ticks
     @layout.update false
     ext =
-      y: d3.extent @parsed.map(-> it.y)
-      x: d3.extent @parsed.map(-> it.x)
-      s: d3.extent @parsed.map(-> it.size)
+      y: extent @parsed.map(-> it.y)
+      x: extent @parsed.map(-> it.x)
+      s: extent @parsed.map(-> it.size)
     if @cfg.align-range =>
       ext.y = ext.x = [Math.min.apply(Math, ext.y ++ ext.x), Math.max.apply(Math, ext.y ++ ext.x)]
     axising = ~>
@@ -409,11 +425,11 @@ mod = ({context, t}) ->
       minr = (@cfg.dot.min-radius or 0) * box.width * 0.2 / 100
       pad = maxr + @cfg.dot.stroke-width
 
-      @scale.s = d3.scaleSqrt!domain(ext.s).range [minr, maxr]
+      @scale.s = Scale.sqrt!domain(ext.s).range [minr, maxr]
       @scale.y = switch @cfg.yaxis.scale
-        | \log => d3.scaleSymlog!domain(ext.y).range [box.height - pad, pad]
+        | \log => Scale.symlog!domain(ext.y).range [box.height - pad, pad]
         | \pr => scale-pr {clamp: true} .domain(@ylist).range [box.height - pad, pad]
-        | _ => d3.scaleLinear!domain(ext.y).range [box.height - pad, pad]
+        | _ => Scale.linear!domain(ext.y).range [box.height - pad, pad]
       max-tick = Math.ceil(@layout.get-box \yaxis .height / 16) >? 2
       yticks = @scale.y.ticks((@cfg.{}xaxis.tick.count or 4) <? max-tick)
       ybind = (@binding.y or {})
@@ -426,22 +442,21 @@ mod = ({context, t}) ->
       @yaxis.render!
 
       # Y-axis grid (horizontal lines)
-      @grid-y.selectAll \line .data(if (@cfg.yaxis.grid or {}).enabled => yticks else [])
-        ..exit!remove!
-        ..enter!append \line
-      @grid-y.selectAll \line
-        .attr \x1, 0
-        .attr \x2, box.width
-        .attr \y1, (d) ~> @scale.y d
-        .attr \y2, (d) ~> @scale.y d
-        .attr \stroke, (@cfg.yaxis.grid or {}).color or 'rgba(0,0,0,0.1)'
-        .attr \stroke-width, (@cfg.yaxis.grid or {}).strokeWidth or 1
-        .attr \stroke-dasharray, (@cfg.yaxis.grid or {}).strokeDasharray or ''
+      grid = (@cfg.yaxis.grid or {})
+      gj = join root: @grid-y, tag: \line, data: (if grid.enabled => yticks else [])
+      gj.exit.map -> it.remove!
+      gj.nodes.map (n) ~>
+        d = n.__data__
+        attrs n, do
+          x1: 0, x2: box.width, y1: @scale.y(d), y2: @scale.y(d)
+          stroke: grid.color or 'rgba(0,0,0,0.1)'
+          "stroke-width": grid.strokeWidth or 1
+          "stroke-dasharray": grid.strokeDasharray or ''
 
       @scale.x = switch @cfg.xaxis.scale
-        | \log => d3.scaleSymlog!domain(ext.x).range [pad, box.width - pad]
+        | \log => Scale.symlog!domain(ext.x).range [pad, box.width - pad]
         | \pr => scale-pr {clamp: true} .domain(@xlist).range [pad, box.width - pad]
-        | _ => d3.scaleLinear!domain(ext.x).range [pad, box.width - pad]
+        | _ => Scale.linear!domain(ext.x).range [pad, box.width - pad]
       max-tick = Math.ceil(@layout.get-box \xaxis .width / 80) >? 2
       xticks = @scale.x.ticks((@cfg.{}xaxis.tick.count or 4) <? max-tick)
       xbind = (@binding.x or {})
@@ -454,17 +469,16 @@ mod = ({context, t}) ->
       @xaxis.render!
 
       # X-axis grid (vertical lines)
-      @grid-x.selectAll \line .data(if (@cfg.xaxis.grid or {}).enabled => xticks else [])
-        ..exit!remove!
-        ..enter!append \line
-      @grid-x.selectAll \line
-        .attr \x1, (d) ~> @scale.x d
-        .attr \x2, (d) ~> @scale.x d
-        .attr \y1, 0
-        .attr \y2, box.height
-        .attr \stroke, (@cfg.xaxis.grid or {}).color or 'rgba(0,0,0,0.1)'
-        .attr \stroke-width, (@cfg.xaxis.grid or {}).strokeWidth or 1
-        .attr \stroke-dasharray, (@cfg.xaxis.grid or {}).strokeDasharray or ''
+      grid = (@cfg.xaxis.grid or {})
+      gj = join root: @grid-x, tag: \line, data: (if grid.enabled => xticks else [])
+      gj.exit.map -> it.remove!
+      gj.nodes.map (n) ~>
+        d = n.__data__
+        attrs n, do
+          x1: @scale.x(d), x2: @scale.x(d), y1: 0, y2: box.height
+          stroke: grid.color or 'rgba(0,0,0,0.1)'
+          "stroke-width": grid.strokeWidth or 1
+          "stroke-dasharray": grid.strokeDasharray or ''
 
     for i from 0 til 2 => axising!
     @parsed.map (d) ~>
@@ -498,58 +512,61 @@ mod = ({context, t}) ->
         .alpha 1
         .alphaDecay 0.01
         .velocityDecay 0.3
-      @sim.restart!
+      # 不用 d3-timer 自己跑: 由 tick 每格推一步, 跟著 chart.anim 的時鐘走 ( 錄影時才拍得到 )
+      @sim.stop!
 
 
   render: ->
     {data, line, binding, scale, tint, legend, cfg, parsed} = @
     @parsed.map (d) ~>
       d.focused = if !@focus-mode.names.length => true else ( d.name in @focus-mode.names )
-    @g.view.selectAll \circle.data .data @parsed
-      ..exit!remove!
-      ..enter!append \circle
-        .attr \class, \data
-        .attr \r, 0
-        .attr \cx, (d) -> scale.x d.x
-        .attr \cy, (d) -> scale.y d.y
-        .attr \fill, (d) -> tint.get(if d.cat? => d.cat else '')
-        .attr \stroke, (d) -> cfg.dot.stroke
-        .attr \strokeWidth, (d) -> cfg.dot.strokeWidth
-    @g.view.selectAll \circle.data
-      .transition!duration 350
-      .attr \r, (d) -> d.radius
-      .attr \cx, (d) -> scale.x d.x
-      .attr \cy, (d) -> scale.y d.y
-      .attr \fill, (d) -> tint.get(if d.cat? => d.cat else '')
-      .attr \opacity, (d) ~>
-        if @dimed(d) => 0.1 <? (cfg.dot.opacity / 2)
-        else cfg.dot.opacity >? 0.1
-      .attr \stroke, (d) -> cfg.dot.stroke
-      .attr \stroke-width, (d) -> cfg.dot.strokeWidth
+    tween = (n, a, opt = {}) ~> @anim.tween n, a, {duration: 350} <<< opt
+    cj = join root: @g.view, tag: \circle, cls: \data, data: @parsed
+    cj.exit.map ~>
+      @anim.interrupt it
+      it.remove!
+    cj.enter.map (n) ->
+      d = n.__data__
+      attrs n, do
+        r: 0, cx: scale.x(d.x), cy: scale.y(d.y)
+        fill: tint.get(if d.cat? => d.cat else '')
+        stroke: cfg.dot.stroke, strokeWidth: cfg.dot.strokeWidth
+    cj.nodes.map (n) ~>
+      d = n.__data__
+      tween n, do
+        r: d.radius
+        cx: scale.x d.x
+        cy: scale.y d.y
+        fill: tint.get(if d.cat? => d.cat else '')
+        opacity: if @dimed(d) => 0.1 <? (cfg.dot.opacity / 2) else cfg.dot.opacity >? 0.1
+        stroke: cfg.dot.stroke
+        "stroke-width": cfg.dot.strokeWidth
 
-    @g.view.selectAll \text.label .data(if (@cfg.label or {}).enabled => @parsed else [])
-      ..exit!remove!
-      ..enter!append \text
-        .attr \class, ->
-          family = ((cfg.label or {}).font or {}).family
-          "label #{if family => that.className or '' else ''}"
-        .attr \dominant-baseline, \middle
-        .attr \text-anchor, \middle
-        .attr \transform, (d,i) -> "translate(#{d.px},#{d.py})"
-        .style \opacity, 0
-        .attr \font-size, 0
-
-    @g.view.selectAll \text.label
-      .attr \font-size, (((cfg.label or {}).font or {}).size or \.75em)
-      .style \pointer-events, (d) -> if d.label-capped => \none else ''
-      .text (d,i) ~> if @binding.label => (d.label or '') else (d.name or '')
-      .each (d) ->
-        box = @.getBBox!
-        d.node.w = box.width
-        d.node.h = box.height
-    @g.view.selectAll \text.label
-      .transition!duration 350
-      .style \opacity, (d) ~> if @dimed(d) or d.label-capped => 0 else 1
+    lj = join root: @g.view, tag: \text, cls: \label, data: (if (@cfg.label or {}).enabled => @parsed else [])
+    lj.exit.map ~>
+      @anim.interrupt it
+      it.remove!
+    lj.enter.map (n) ->
+      d = n.__data__
+      family = ((cfg.label or {}).font or {}).family
+      attrs n, do
+        class: "label #{if family => that.className or '' else ''}"
+        "dominant-baseline": \middle
+        "text-anchor": \middle
+        transform: "translate(#{d.px},#{d.py})"
+        "font-size": 0
+      n.style.opacity = 0
+    lj.nodes.map (n) ~>
+      d = n.__data__
+      n.setAttribute \font-size, (((cfg.label or {}).font or {}).size or \.75em)
+      n.style.pointerEvents = if d.label-capped => \none else ''
+      n.textContent = if @binding.label => (d.label or '') else (d.name or '')
+      box = n.getBBox!
+      d.node.w = box.width
+      d.node.h = box.height
+    lj.nodes.map (n) ~>
+      d = n.__data__
+      tween n, {"style:opacity": if @dimed(d) or d.label-capped => 0 else 1}
 
     corr = _corr @parsed.filter (d,i) -> !(binding.cat?) or legend.is-selected(d.cat)
 
@@ -564,30 +581,29 @@ mod = ({context, t}) ->
     [x1, x2, y1, y2] = [scale.x(x1), scale.x(x2), scale.y(y1), scale.y(y2)]
     hide-line = (isNaN(x1) or isNaN(x2) or isNaN(y1) or isNaN(y2)) or !(corr.0 or corr.1) or !cfg.regression.enabled
 
-    @regression
-      .transition \regression .duration 350
-      .attr \x1, if hide-line => 0 else x1
-      .attr \x2, if hide-line => 0 else x2
-      .attr \y1, if hide-line => 0 else y1
-      .attr \y2, if hide-line => 0 else y2
-      .attr \opacity, if hide-line => 0 else cfg.regression.opacity
-      .attr \stroke, cfg.regression.stroke
-      .attr \stroke-width, cfg.regression.strokeWidth
-      .attr \stroke-dasharray, cfg.regression.strokeDasharray
+    tween @regression, do
+      x1: if hide-line => 0 else x1
+      x2: if hide-line => 0 else x2
+      y1: if hide-line => 0 else y1
+      y2: if hide-line => 0 else y2
+      opacity: if hide-line => 0 else cfg.regression.opacity
+      stroke: cfg.regression.stroke
+      "stroke-width": cfg.regression.strokeWidth
+      "stroke-dasharray": cfg.regression.strokeDasharray
 
     sorted = parsed.map(-> it{x,y,order})
     sorted.sort (a,b) -> if a.order < b.order => -1 else if a.o > b.o => 1 else 0
-    @trend
-      .attr \d, -> line sorted
-      .attr \fill, \none
-      .attr \opacity, if cfg.trend.enabled => 1 else 0
-      .attr \stroke, cfg.trend.stroke
-      .attr \stroke-width, cfg.trend.strokeWidth
-      .attr \stroke-dasharray, cfg.trend.strokeDasharray
-      .attr \stroke-linecap, cfg.trend.cap
-      .attr \stroke-linejoin, cfg.trend.join
+    attrs @trend, do
+      d: line sorted
+      fill: \none
+      opacity: if cfg.trend.enabled => 1 else 0
+      stroke: cfg.trend.stroke
+      "stroke-width": cfg.trend.strokeWidth
+      "stroke-dasharray": cfg.trend.strokeDasharray
+      "stroke-linecap": cfg.trend.cap
+      "stroke-linejoin": cfg.trend.join
     dashoffset = cfg.trend.strokeDasharray.split(' ').filter(->it?).reduce(((a,b)->a + +b),0)
-    @trend-ani.attr \values, "#dashoffset;0"
+    @trend-ani.setAttribute \values, "#dashoffset;0"
 
     @legend.render!
     @yaxis.render!
@@ -598,5 +614,7 @@ mod = ({context, t}) ->
     {data, line, binding, scale, tint, legend, cfg} = @
     if !(@cfg.label or {}).enabled => return
     @_tick = (@_tick or 0) + 1
-    @g.view.selectAll \text.label
-      .attr \transform, (d) -> "translate(#{d.node.x},#{d.node.y})"
+    if @sim.alpha! >= @sim.alpha-min! => @sim.tick!
+    Array.from(@g.view.querySelectorAll ':scope > text.label').map (n) ->
+      d = n.__data__
+      n.setAttribute \transform, "translate(#{d.node.x},#{d.node.y})"
