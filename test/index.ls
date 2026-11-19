@@ -31,10 +31,18 @@ mctest.suite do
     many: mk 60
     few: mk 8
     plain: plain 30
+    # host 把沒用到的維度綁到不存在的欄位 ( makechart connector 的作法 )
+    none:
+      raw: [{n: \a, x: 1, y: 2}, {n: \b, x: 2, y: 4}, {n: \c, x: 3, y: 3}]
+      binding:
+        x: {key: \x}, y: {key: \y}
+        name: {key: "\u0000none"}, cat: {key: "\u0000none"}, size: {key: "\u0000none"}
   cases:
     * name: "many", data: \many
     * name: "few", data: \few
     * name: "plain", data: \plain
+    * name: "unbound", data: \none
+      config: {legend: {selectable: false}, xaxis: {tick: {boundary-offset: false}}, yaxis: {tick: {boundary-offset: false}}}
     * name: "log", data: \many, config: {xaxis: {scale: \log}, yaxis: {scale: \log}}
     * name: "pr", data: \many, config: {xaxis: {scale: \pr}, yaxis: {scale: \pr}}
     * name: "grid", data: \many, config: {xaxis: {grid: {enabled: true}}, yaxis: {grid: {enabled: true, stroke-dasharray: '3 3'}}}

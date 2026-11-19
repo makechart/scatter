@@ -1,5 +1,13 @@
 # Change Logs
 
+## v0.0.5
+
+ - fix bug: `cat` / `size` / `label` bound to a field that doesn't exist in the data ( e.g. a host binding
+   unused dimensions to an empty field ) were treated as bound. the legend showed one `undefined` item and
+   dots were drawn at the minimum radius. they are now treated as unbound
+ - add `unbound` test case
+
+
 ## v0.0.4
 
  - extend the lite base ( `@makechart/base` `lite/index.html`, no d3 ): needs `@makechart/base` >= 0.2.0

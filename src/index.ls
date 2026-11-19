@@ -329,7 +329,7 @@ mod = ({context, t}) ->
       @focus-mode.enabled = !!names.length
       if @parsed => @render!
     @dimed = (d) ~>
-      !((!(@binding.cat?) or @legend.is-selected d.cat) and !(@focus-mode.enabled and !d.focused))
+      !((!@has.cat or @legend.is-selected d.cat) and !(@focus-mode.enabled and !d.focused))
     @label-force = get-label-force d3
     @tint = tint = new chart.utils.tint!
     @sim = d3.forceSimulation!
@@ -371,11 +371,14 @@ mod = ({context, t}) ->
             (data.name or '')
             if data.order => " / #{data.order}" else ''
           ].join('')
-          value: if @binding.size => v else '-'
+          value: if @has.size => v else '-'
       range: ~> @layout.get-node \view .getBoundingClientRect!
     }
   destroy: -> if @tip => @tip.destroy!
   parse: ->
+    # 綁了但欄位不存在 ( 例如 host 把沒用到的維度綁到空欄位 ) 當作沒綁, 不然 legend 會出現 undefined 一項
+    @has = {}
+    for k in <[cat size label]> => @has[k] = !!@binding[k] and @data.some(-> it[k]?)
     @parsed = @data.map (d) ->
       ret = {} <<< d
       ret.size = if isNaN(d.size) => 0 else d.size
@@ -408,7 +411,7 @@ mod = ({context, t}) ->
     @root.querySelector('.pdl-layout').classList.toggle \xaxis-center, @cfg.xaxis.center == true
     @root.querySelector('.pdl-layout').classList.toggle \yaxis-center, @cfg.yaxis.center == true
     @legend.config @cfg.legend
-    ticks = if !@binding.cat => []
+    ticks = if !@has.cat => []
     else Array.from(new Set(@parsed.map -> it.cat)).map -> {key: it, text: it}
     @legend.data ticks
     @layout.update false
@@ -482,7 +485,7 @@ mod = ({context, t}) ->
 
     for i from 0 til 2 => axising!
     @parsed.map (d) ~>
-      d.radius = if @binding.size? => @scale.s(d.size) >? 1 else (@cfg.dot.max-radius / 2) >? 1
+      d.radius = if @has.size => @scale.s(d.size) >? 1 else (@cfg.dot.max-radius / 2) >? 1
       d.px = @scale.x d.x
       d.py = @scale.y d.y
 
@@ -560,7 +563,7 @@ mod = ({context, t}) ->
       d = n.__data__
       n.setAttribute \font-size, (((cfg.label or {}).font or {}).size or \.75em)
       n.style.pointerEvents = if d.label-capped => \none else ''
-      n.textContent = if @binding.label => (d.label or '') else (d.name or '')
+      n.textContent = if @has.label => (d.label or '') else (d.name or '')
       box = n.getBBox!
       d.node.w = box.width
       d.node.h = box.height
@@ -568,7 +571,7 @@ mod = ({context, t}) ->
       d = n.__data__
       tween n, {"style:opacity": if @dimed(d) or d.label-capped => 0 else 1}
 
-    corr = _corr @parsed.filter (d,i) -> !(binding.cat?) or legend.is-selected(d.cat)
+    corr = _corr @parsed.filter (d,i) ~> !@has.cat or legend.is-selected(d.cat)
 
     [x1, x2] = scale.x.domain!
     [y1, y2] = [x1,x2].map -> it * corr.1 + corr.0
