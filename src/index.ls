@@ -317,6 +317,13 @@ mod = ({context, t}) ->
       stroke-width: type: \number, default: 1, min: 0, max: 100, step: 0.5, desc: {en: "width of the regression line ( px )", "zh-TW": "迴歸線的粗細 ( px )"}
       stroke-dasharray: type: \text, default: '5 5', desc: {en: "dash pattern, e.g. 5 5; empty for a solid line", "zh-TW": "虛線樣式，例如 5 5；空白為實線"}
       opacity: type: \number, default: 0.5, min: 0, max: 1, step: 0.01, desc: {en: "opacity of the regression line ( 0 to 1 )", "zh-TW": "迴歸線的不透明度 ( 0 到 1 )"}
+  # 段落 ( tab ) 的說明, key 是段落的路徑. preset 的段落由 chart.utils.config.tabinfo 掛上來, 共用的 common 由核心補.
+  # label 是點旁的文字標籤, 不是 preset 的 label
+  tabinfo: chart.utils.config.tabinfo({xaxis: \axis, yaxis: \axis, legend: \legend, tip: \tip}) <<<
+    dot: desc: {en: "size, opacity and outline of the dots", "zh-TW": "點的大小、不透明度與外框"}
+    label: desc: {en: "text labels next to the dots", "zh-TW": "點旁的文字標籤"}
+    trend: desc: {en: "a line connecting the dots in the order of the order field", "zh-TW": "依 order 欄位的順序把點連起來的線"}
+    regression: desc: {en: "the least-squares regression line of the visible dots", "zh-TW": "可見資料點的最小平方法迴歸線"}
   dimension:
     name: {type: \NC, name: "name"}
     label: {type: \N, name: "label", desc: "text dedicated for showing in label. name will be used if omitted"}
