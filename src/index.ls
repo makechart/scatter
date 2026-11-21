@@ -256,6 +256,7 @@ mod = ({context, t}) ->
     xaxis: JSON.parse(JSON.stringify(chart.utils.config.preset.axis)) <<< do
       scale:
         type: \choice, defalut: \linear
+        desc: {en: "how values map to positions: linear; pr spreads the dots by percentile rank; log uses a symmetric log scale ( works with 0 and negatives )", "zh-TW": "數值對應到位置的方式：linear 線性；pr 依百分位排名平均攤開；log 對稱對數刻度 ( 可處理 0 與負數 )"}
         values: [
         * name: \Linear, value: \linear
         * name: 'Percentile Rank', value: \pr
@@ -269,6 +270,7 @@ mod = ({context, t}) ->
     yaxis: JSON.parse(JSON.stringify(chart.utils.config.preset.axis)) <<< do
       scale:
         type: \choice, defalut: \linear
+        desc: {en: "how values map to positions: linear; pr spreads the dots by percentile rank; log uses a symmetric log scale ( works with 0 and negatives )", "zh-TW": "數值對應到位置的方式：linear 線性；pr 依百分位排名平均攤開；log 對稱對數刻度 ( 可處理 0 與負數 )"}
         values: [
         * name: \Linear, value: \linear
         * name: \PR, value: \pr
@@ -281,39 +283,40 @@ mod = ({context, t}) ->
         stroke-dasharray: type: \text, default: ''
   } <<< chart.utils.config.preset.default <<< do
     alignRange:
-      name: "align data range", type: \boolean, default: false
+      name: "align data range", type: \boolean, default: false, desc: {en: "give the x and y axes the same value range, so both axes read on one scale", "zh-TW": "X 軸與 Y 軸使用同一個數值範圍，兩軸的刻度可以直接比較"}
     dot:
-      min-radius: name: "min radius", type: \number, default: 1, min: 0.0, max: 100, step: 0.1
-      max-radius: name: "max radius", type: \number, default: 6, min: 0.1, max: 100, step: 0.1
-      opacity: type: \number, default: 0.75, min: 0, max: 1, step: 0.01
-      stroke: type: \color, default: \#000
-      stroke-width: type: \number, default: 1, min: 0, max: 100, step: 0.5
+      min-radius: name: "min radius", type: \number, default: 1, min: 0.0, max: 100, step: 0.1, desc: {en: "radius of the dot with the smallest size value, relative to the plot width ( 100 = a fifth of the width )", "zh-TW": "size 最小的點的半徑，以繪圖區寬度為基準 ( 100 = 寬度的五分之一 )"}
+      max-radius: name: "max radius", type: \number, default: 6, min: 0.1, max: 100, step: 0.1, desc: {en: "radius of the dot with the largest size value, relative to the plot width ( 100 = a fifth of the width ); without a size field, every dot is half this value in px", "zh-TW": "size 最大的點的半徑，以繪圖區寬度為基準 ( 100 = 寬度的五分之一 )；沒有綁定 size 時，每個點的半徑是這個值的一半 ( px )"}
+      opacity: type: \number, default: 0.75, min: 0, max: 1, step: 0.01, desc: {en: "opacity of the dots ( 0 to 1 ); dimmed dots use half of it", "zh-TW": "點的不透明度 ( 0 到 1 )；淡化的點用這個值的一半"}
+      stroke: type: \color, default: \#000, desc: {en: "outline color of the dots", "zh-TW": "點的外框顏色"}
+      stroke-width: type: \number, default: 1, min: 0, max: 100, step: 0.5, desc: {en: "outline width of the dots ( px )", "zh-TW": "點的外框粗細 ( px )"}
     # the result of force-label-rect-band isn't good enough, sometimes labels just overlap with nodes.
     # so we show consider hiding this option.
     label:
-      enabled: type: \boolean, default: false
+      enabled: type: \boolean, default: false, desc: {en: "show a text label at each dot ( the label field, or the name ); labels are pushed apart by a force layout and may still overlap dots", "zh-TW": "在每個點旁顯示文字標籤 ( label 欄位，沒有時用 name )；標籤以力導向排開，仍可能壓到點"}
       font: {} <<< chart.utils.config.preset.font
       cap:
         type: \quantity, default: \100p
+        desc: {en: "limit how many labels are shown: a percentage of all dots ( ﹪ ) or a fixed count ( pts )", "zh-TW": "限制顯示幾個標籤：全部點數的百分比 ( ﹪ ) 或固定數量 ( pts )"}
         units:
           * name: \﹪, max: 100, min: 0, step: 1, default: 10
           * name: \pts, step: 1, default: 100
 
     trend:
-      enabled: type: \boolean, default: false
-      stroke: type: \color, default: 'rgba(0,0,0,.3)'
-      stroke-width: type: \number, default: 1, min: 0, max: 100, step: 0.5
-      stroke-dasharray: type: \text, default: '5 5'
+      enabled: type: \boolean, default: false, desc: {en: "connect the dots with a line in the order of the order field; dashes move along the line", "zh-TW": "依 order 欄位的順序把點連成一條線；虛線會沿著線流動"}
+      stroke: type: \color, default: 'rgba(0,0,0,.3)', desc: {en: "color of the trend line", "zh-TW": "趨勢線的顏色"}
+      stroke-width: type: \number, default: 1, min: 0, max: 100, step: 0.5, desc: {en: "width of the trend line ( px )", "zh-TW": "趨勢線的粗細 ( px )"}
+      stroke-dasharray: type: \text, default: '5 5', desc: {en: "dash pattern, e.g. 5 5; empty for a solid line", "zh-TW": "虛線樣式，例如 5 5；空白為實線"}
       opacity: type: \number, default: 0.5, min: 0, max: 1, step: 0.01
-      mode: type: \choice, values: <[curve linear]>, default: \linear
-      cap: type: \choice, values: <[butt round square]>, default: \round
-      join: type: \choice, values: <[bevel miter round]>, default: \round
+      mode: type: \choice, values: <[curve linear]>, default: \linear, desc: {en: "curve draws a smooth line through the dots, linear uses straight segments", "zh-TW": "curve 以平滑曲線穿過各點，linear 用直線連接"}
+      cap: type: \choice, values: <[butt round square]>, default: \round, desc: {en: "shape of the line ends", "zh-TW": "線段端點的形狀"}
+      join: type: \choice, values: <[bevel miter round]>, default: \round, desc: {en: "shape of the corners where segments meet", "zh-TW": "線段轉折處的形狀"}
     regression:
-      enabled: type: \boolean, default: true
-      stroke: type: \color, default: \#000
-      stroke-width: type: \number, default: 1, min: 0, max: 100, step: 0.5
-      stroke-dasharray: type: \text, default: '5 5'
-      opacity: type: \number, default: 0.5, min: 0, max: 1, step: 0.01
+      enabled: type: \boolean, default: true, desc: {en: "draw the least-squares regression line of the visible dots", "zh-TW": "畫出可見資料點的最小平方法迴歸線"}
+      stroke: type: \color, default: \#000, desc: {en: "color of the regression line", "zh-TW": "迴歸線的顏色"}
+      stroke-width: type: \number, default: 1, min: 0, max: 100, step: 0.5, desc: {en: "width of the regression line ( px )", "zh-TW": "迴歸線的粗細 ( px )"}
+      stroke-dasharray: type: \text, default: '5 5', desc: {en: "dash pattern, e.g. 5 5; empty for a solid line", "zh-TW": "虛線樣式，例如 5 5；空白為實線"}
+      opacity: type: \number, default: 0.5, min: 0, max: 1, step: 0.01, desc: {en: "opacity of the regression line ( 0 to 1 )", "zh-TW": "迴歸線的不透明度 ( 0 到 1 )"}
   dimension:
     name: {type: \NC, name: "name"}
     label: {type: \N, name: "label", desc: "text dedicated for showing in label. name will be used if omitted"}

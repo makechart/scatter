@@ -1,5 +1,10 @@
 # Change Logs
 
+## v0.0.6
+
+ - add `desc` ( en / zh-TW ) to the config items, shown under the label in the makechart style panel
+
+
 ## v0.0.5
 
  - fix bug: `cat` / `size` / `label` bound to a field that doesn't exist in the data ( e.g. a host binding
